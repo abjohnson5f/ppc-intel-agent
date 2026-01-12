@@ -52,7 +52,8 @@ async function main() {
     const businessInfo = {
       name: 'Stiltner Landscapes',
       website: 'https://stiltnerlandscapes.com',
-      phone: '(614) 707-4788',
+      // NOTE: Phone number intentionally omitted from business info
+      // to prevent AI from putting it in ad headlines (policy violation)
       services: [
         'Landscape Design',
         'Hardscaping',

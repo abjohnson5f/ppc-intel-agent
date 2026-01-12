@@ -1,6 +1,6 @@
 {
   "name": "ppc-intelligence-agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Autonomous PPC Management Agent powered by Claude Agent SDK",
   "type": "module",
   "main": "dist/index.js",
@@ -11,14 +11,16 @@
     "campaign": "tsx src/run-campaign-builder.ts",
     "health-check": "tsx src/run-health-check.ts",
     "competitor-intel": "tsx src/run-competitor-intel.ts",
-    "full-audit": "tsx src/run-full-audit.ts"
+    "full-audit": "tsx src/run-full-audit.ts",
+    "keyword-research": "tsx src/run-keyword-research.ts",
+    "webhook-server": "tsx src/webhook-server.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.75.0",
-    "google-ads-api": "^16.0.0",
+    "@anthropic-ai/sdk": "^0.71.2",
+    "chalk": "^5.3.0",
     "dotenv": "^16.4.5",
-    "zod": "^3.24.0",
-    "chalk": "^5.3.0"
+    "google-ads-api": "^22.0.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

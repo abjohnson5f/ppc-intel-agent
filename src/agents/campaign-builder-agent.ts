@@ -44,8 +44,10 @@ const resourceName = {
 
 /**
  * Common geo target constants for Ohio
+ * Supports both "Dublin" and "Dublin, Ohio" formats
  */
-const OHIO_GEO_TARGETS = {
+const OHIO_GEO_TARGETS: Record<string, string> = {
+  // Full format (with state)
   'Dublin, Ohio': '1014895',
   'Powell, Ohio': '1015053', 
   'Galena, Ohio': '1014921',
@@ -54,6 +56,15 @@ const OHIO_GEO_TARGETS = {
   'Columbus, Ohio': '1014868',
   'Delaware, Ohio': '1014893',
   'Lewis Center, Ohio': '1014977',
+  // Short format (without state)
+  'Dublin': '1014895',
+  'Powell': '1015053', 
+  'Galena': '1014921',
+  'New Albany': '1015007',
+  'Westerville': '1015149',
+  'Columbus': '1014868',
+  'Delaware': '1014893',
+  'Lewis Center': '1014977',
 };
 
 /**
@@ -128,6 +139,10 @@ export interface AdSpec {
 
 /**
  * Build a campaign budget operation
+ * 
+ * NOTE: Per Opteo library/Google Ads API:
+ * - amount_micros is a NUMBER (int64)
+ * - delivery_method is a numeric enum (2 = STANDARD)
  */
 function buildBudgetOperation(
   customerId: string,
@@ -139,15 +154,20 @@ function buildBudgetOperation(
     create: {
       resource_name: `customers/${customerId}/campaignBudgets/${tempId}`,
       name: `${name} Budget`,
-      amount_micros: Math.round(dailyBudgetDollars * 1_000_000).toString(),
-      delivery_method: 'STANDARD',
-      explicitly_shared: false,
+      amount_micros: Math.round(dailyBudgetDollars * 1_000_000),
+      delivery_method: 2, // STANDARD
     },
   };
 }
 
 /**
  * Build a campaign operation
+ * 
+ * NOTE: Per Google Ads API docs (January 2026):
+ * - start_date and end_date are OPTIONAL
+ * - manual_cpc should be { enhanced_cpc_enabled: false }
+ * - target_cpa_micros is a NUMBER (int64)
+ * - contains_eu_political_advertising is REQUIRED (enum value 3 = DOES_NOT_CONTAIN)
  */
 function buildCampaignOperation(
   customerId: string,
@@ -159,35 +179,42 @@ function buildCampaignOperation(
     create: {
       resource_name: `customers/${customerId}/campaigns/${tempId}`,
       name: spec.name,
-      status: 'PAUSED', // Always create as PAUSED for safety
-      advertising_channel_type: 'SEARCH',
+      status: 3, // PAUSED - Always create as PAUSED for safety
+      advertising_channel_type: 2, // SEARCH
       campaign_budget: `customers/${customerId}/campaignBudgets/${budgetTempId}`,
       network_settings: NETWORK_SETTINGS[spec.networks],
-      start_date: formatDate(new Date()),
+      // REQUIRED: EU Political Advertising declaration (3 = DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING)
+      contains_eu_political_advertising: 3,
     },
   };
 
-  // Add bidding strategy
+  // Add bidding strategy (per Google's API examples)
+  // NOTE: Bidding strategy objects CANNOT be empty - they need at least one field
+  // or the API will reject them as "required field not present"
   switch (spec.biddingStrategy) {
     case 'MAXIMIZE_CONVERSIONS':
-      operation.create.maximize_conversions = {};
       if (spec.targetCpa) {
-        operation.create.maximize_conversions.target_cpa_micros = 
-          Math.round(spec.targetCpa * 1_000_000).toString();
+        operation.create.maximize_conversions = {
+          target_cpa_micros: Math.round(spec.targetCpa * 1_000_000),
+        };
+      } else {
+        operation.create.maximize_conversions = {
+          cpc_bid_ceiling_micros: 0, // No ceiling
+        };
       }
       break;
     case 'MAXIMIZE_CLICKS':
-      operation.create.maximize_clicks = {};
+      // NOTE: "target_spend" is the correct API field for Maximize Clicks bidding strategy
+      // "maximize_clicks" field doesn't work via MCP Bridge - use target_spend instead
+      operation.create.target_spend = {};
       break;
     case 'TARGET_CPA':
       operation.create.target_cpa = {
-        target_cpa_micros: Math.round((spec.targetCpa || 50) * 1_000_000).toString(),
+        target_cpa_micros: Math.round((spec.targetCpa || 50) * 1_000_000),
       };
       break;
     case 'MANUAL_CPC':
-      operation.create.manual_cpc = {
-        enhanced_cpc_enabled: true,
-      };
+      operation.create.manual_cpc = { enhanced_cpc_enabled: false };
       break;
   }
 
@@ -196,6 +223,10 @@ function buildCampaignOperation(
 
 /**
  * Build an ad group operation
+ * 
+ * NOTE: Per Opteo library/Google Ads API:
+ * - status is a numeric enum (2 = ENABLED)
+ * - type is a numeric enum (2 = SEARCH_STANDARD)
  */
 function buildAdGroupOperation(
   customerId: string,
@@ -208,14 +239,18 @@ function buildAdGroupOperation(
       resource_name: `customers/${customerId}/adGroups/${tempId}`,
       name,
       campaign: `customers/${customerId}/campaigns/${campaignTempId}`,
-      status: 'ENABLED',
-      type: 'SEARCH_STANDARD',
+      status: 2, // ENABLED
+      type: 2, // SEARCH_STANDARD
     },
   };
 }
 
 /**
  * Build a keyword operation
+ * 
+ * NOTE: Per Opteo library/Google Ads API:
+ * - status is a numeric enum (2 = ENABLED)
+ * - match_type is a numeric enum (2 = EXACT, 3 = PHRASE, 4 = BROAD)
  */
 function buildKeywordOperation(
   customerId: string,
@@ -223,17 +258,17 @@ function buildKeywordOperation(
   adGroupTempId: string,
   keyword: KeywordSpec
 ): any {
-  const matchTypeMap = {
-    EXACT: 'EXACT',
-    PHRASE: 'PHRASE',
-    BROAD: 'BROAD',
+  const matchTypeMap: Record<string, number> = {
+    EXACT: 2,
+    PHRASE: 3,
+    BROAD: 4,
   };
 
   return {
     create: {
       resource_name: `customers/${customerId}/adGroupCriteria/${adGroupTempId}~${tempId}`,
       ad_group: `customers/${customerId}/adGroups/${adGroupTempId}`,
-      status: 'ENABLED',
+      status: 2, // ENABLED
       keyword: {
         text: keyword.text,
         match_type: matchTypeMap[keyword.matchType],
@@ -244,6 +279,9 @@ function buildKeywordOperation(
 
 /**
  * Build a responsive search ad operation
+ * 
+ * NOTE: Per Opteo library/Google Ads API:
+ * - status is a numeric enum (2 = ENABLED)
  */
 function buildAdOperation(
   customerId: string,
@@ -255,13 +293,10 @@ function buildAdOperation(
     create: {
       resource_name: `customers/${customerId}/adGroupAds/${adGroupTempId}~${tempId}`,
       ad_group: `customers/${customerId}/adGroups/${adGroupTempId}`,
-      status: 'ENABLED',
+      status: 2, // ENABLED
       ad: {
         responsive_search_ad: {
-          headlines: ad.headlines.map((text, i) => ({
-            text,
-            pinned_field: i < 3 ? undefined : undefined, // First 3 can rotate
-          })),
+          headlines: ad.headlines.map(text => ({ text })),
           descriptions: ad.descriptions.map(text => ({ text })),
           path1: ad.path1,
           path2: ad.path2,
@@ -274,21 +309,23 @@ function buildAdOperation(
 
 /**
  * Build location targeting operation
+ * 
+ * NOTE: Per Google Ads API:
+ * - Don't include resource_name for campaign_criterion
+ * - type is a numeric enum (6 = LOCATION)
+ * - location should be flat (not wrapped in criterion)
  */
 function buildLocationTargetOperation(
   customerId: string,
-  tempId: string,
   campaignTempId: string,
   geoTargetId: string
 ): any {
   return {
     create: {
-      resource_name: `customers/${customerId}/campaignCriteria/${campaignTempId}~${tempId}`,
       campaign: `customers/${customerId}/campaigns/${campaignTempId}`,
-      criterion: {
-        location: {
-          geo_target_constant: `geoTargetConstants/${geoTargetId}`,
-        },
+      type: 6, // LOCATION
+      location: {
+        geo_target_constant: `geoTargetConstants/${geoTargetId}`,
       },
       negative: false,
     },
@@ -322,12 +359,24 @@ When given a campaign request, you will:
 - Use PHRASE match for service + modifier combinations
 - Use BROAD match sparingly for discovery
 
-### Ad Copy Rules (CRITICAL)
-- Headlines: MAX 30 characters each, need 3-15
-- Descriptions: MAX 90 characters each, need 2-4
+### Ad Copy Rules (CRITICAL - CHARACTER LIMITS ARE STRICT!)
+⚠️ IMPORTANT: These character limits are ENFORCED by Google and CANNOT be exceeded!
+- Headlines: MAX 30 characters each (count carefully!), need 3-15
+- Descriptions: MAX 90 characters each (count carefully!), need 2-4
+- Path1: MAX 15 characters (e.g., "design" not "landscape-design")
+- Path2: MAX 15 characters (e.g., "dublin" not "dublin-ohio")
 - Include location in at least one headline
 - Include call-to-action (Free Estimate, Call Now, etc.)
 - Highlight differentiators (Licensed, Insured, etc.)
+⚠️ If a headline is 31+ chars or description is 91+ chars, it WILL be rejected!
+
+### Ad Policy Rules (NEVER VIOLATE)
+- NEVER put phone numbers in headlines (use "Call Today" instead)
+- NEVER use excessive punctuation (no !!! or ... or ???)
+- NEVER use ALL CAPS words (except acronyms like LLC)
+- NEVER include prices in ad copy unless they are exact and current
+- NEVER make claims you can't prove (avoid "Best", "#1", "Award-Winning" without proof)
+- Instead of "Call (614) 555-1234", use "Call Now" or "Call Today"
 
 ### Structure
 - One theme per ad group (e.g., "Landscape Design", "Lawn Care")
@@ -429,11 +478,51 @@ interface CampaignSpec {
   }
 
   const jsonStr = jsonMatch[1] || jsonMatch[0];
-  const spec: CampaignSpec = JSON.parse(jsonStr);
+  let spec: CampaignSpec = JSON.parse(jsonStr);
+
+  // Sanitize the spec (fix common AI mistakes like too-long text)
+  spec = sanitizeSpec(spec);
 
   // Validate the spec
   validateCampaignSpec(spec);
 
+  return spec;
+}
+
+/**
+ * Sanitize and fix common AI-generated issues
+ */
+function sanitizeSpec(spec: CampaignSpec): CampaignSpec {
+  for (const adGroup of spec.adGroups) {
+    for (const ad of adGroup.ads) {
+      // Truncate headlines that are too long (max 30 chars)
+      ad.headlines = ad.headlines.map(h => h.length > 30 ? h.slice(0, 30).trim() : h);
+      
+      // Truncate descriptions that are too long (max 90 chars)
+      ad.descriptions = ad.descriptions.map(d => {
+        if (d.length > 90) {
+          // Try to truncate at a word boundary
+          const truncated = d.slice(0, 87);
+          const lastSpace = truncated.lastIndexOf(' ');
+          return lastSpace > 60 ? truncated.slice(0, lastSpace) + '...' : truncated + '...';
+        }
+        return d;
+      });
+
+      // Truncate path1/path2 (max 15 chars)
+      if (ad.path1 && ad.path1.length > 15) {
+        ad.path1 = ad.path1.slice(0, 15).replace(/-$/, '');
+      }
+      if (ad.path2 && ad.path2.length > 15) {
+        ad.path2 = ad.path2.slice(0, 15).replace(/-$/, '');
+      }
+
+      // Remove phone numbers from headlines (policy violation)
+      ad.headlines = ad.headlines.map(h =>
+        h.replace(/\(\d{3}\)\s?\d{3}[-.]?\d{4}|\d{3}[-.]?\d{3}[-.]?\d{4}/g, 'Call Today')
+      );
+    }
+  }
   return spec;
 }
 
@@ -471,6 +560,14 @@ function validateCampaignSpec(spec: CampaignSpec): void {
         if (headline.length > 30) {
           throw new Error(`Headline too long (${headline.length} chars, max 30): "${headline}"`);
         }
+        // Google Ads policy: No phone numbers in headlines
+        if (/\(\d{3}\)\s?\d{3}[-.]?\d{4}|\d{3}[-.]?\d{3}[-.]?\d{4}/.test(headline)) {
+          throw new Error(`Phone numbers not allowed in headlines: "${headline}"`);
+        }
+        // Google Ads policy: No excessive punctuation
+        if (/[!]{2,}|[.]{3,}|[?]{2,}/.test(headline)) {
+          throw new Error(`Excessive punctuation not allowed in headlines: "${headline}"`);
+        }
       }
 
       // Validate descriptions
@@ -482,12 +579,23 @@ function validateCampaignSpec(spec: CampaignSpec): void {
           throw new Error(`Description too long (${desc.length} chars, max 90): "${desc}"`);
         }
       }
+
+      // Validate path1 and path2 (max 15 characters each)
+      if (ad.path1 && ad.path1.length > 15) {
+        throw new Error(`path1 too long (${ad.path1.length} chars, max 15): "${ad.path1}"`);
+      }
+      if (ad.path2 && ad.path2.length > 15) {
+        throw new Error(`path2 too long (${ad.path2.length} chars, max 15): "${ad.path2}"`);
+      }
     }
   }
 }
 
 /**
- * Build all operations for a campaign
+ * Build all operations for a campaign using Opteo format
+ * 
+ * The MCP expects operations in Opteo format:
+ * { entity: "campaign_budget", operation: "create", resource: {...} }
  */
 export function buildCampaignOperations(
   customerId: string,
@@ -500,38 +608,51 @@ export function buildCampaignOperations(
 
   // 1. Create budget
   const budgetTempId = getNextTempId();
+  const budgetOp = buildBudgetOperation(customerId, budgetTempId, spec.dailyBudget, spec.name);
   operations.push({
-    campaign_budget_operation: buildBudgetOperation(
-      customerId,
-      budgetTempId,
-      spec.dailyBudget,
-      spec.name
-    ),
+    entity: 'campaign_budget',
+    operation: 'create',
+    resource: budgetOp.create,
   });
 
   // 2. Create campaign
   const campaignTempId = getNextTempId();
+  const campaignOp = buildCampaignOperation(customerId, campaignTempId, budgetTempId, spec);
   operations.push({
-    campaign_operation: buildCampaignOperation(
-      customerId,
-      campaignTempId,
-      budgetTempId,
-      spec
-    ),
+    entity: 'campaign',
+    operation: 'create',
+    resource: campaignOp.create,
   });
 
   // 3. Create location targeting
   for (const location of spec.locations) {
-    const geoTargetId = OHIO_GEO_TARGETS[location as keyof typeof OHIO_GEO_TARGETS];
+    // Try exact match first, then try case-insensitive
+    let geoTargetId = OHIO_GEO_TARGETS[location];
+    if (!geoTargetId) {
+      // Try to find a case-insensitive match
+      const lowerLocation = location.toLowerCase();
+      const matchingKey = Object.keys(OHIO_GEO_TARGETS).find(
+        key => key.toLowerCase() === lowerLocation || 
+               key.toLowerCase().startsWith(lowerLocation.split(',')[0].toLowerCase())
+      );
+      if (matchingKey) {
+        geoTargetId = OHIO_GEO_TARGETS[matchingKey];
+      }
+    }
+    
     if (geoTargetId) {
+      const locationOp = buildLocationTargetOperation(
+        customerId,
+        campaignTempId,
+        geoTargetId
+      );
       operations.push({
-        campaign_criterion_operation: buildLocationTargetOperation(
-          customerId,
-          getNextTempId(),
-          campaignTempId,
-          geoTargetId
-        ),
+        entity: 'campaign_criterion',
+        operation: 'create',
+        resource: locationOp.create,
       });
+    } else {
+      console.warn(`⚠️  Unknown location "${location}" - skipping location targeting`);
     }
   }
 
@@ -540,36 +661,45 @@ export function buildCampaignOperations(
     const adGroupTempId = getNextTempId();
     
     // Ad group
+    const adGroupOp = buildAdGroupOperation(
+      customerId,
+      adGroupTempId,
+      campaignTempId,
+      adGroupSpec.name
+    );
     operations.push({
-      ad_group_operation: buildAdGroupOperation(
-        customerId,
-        adGroupTempId,
-        campaignTempId,
-        adGroupSpec.name
-      ),
+      entity: 'ad_group',
+      operation: 'create',
+      resource: adGroupOp.create,
     });
 
     // Keywords
     for (const keyword of adGroupSpec.keywords) {
+      const keywordOp = buildKeywordOperation(
+        customerId,
+        getNextTempId(),
+        adGroupTempId,
+        keyword
+      );
       operations.push({
-        ad_group_criterion_operation: buildKeywordOperation(
-          customerId,
-          getNextTempId(),
-          adGroupTempId,
-          keyword
-        ),
+        entity: 'ad_group_criterion',
+        operation: 'create',
+        resource: keywordOp.create,
       });
     }
 
     // Ads
     for (const ad of adGroupSpec.ads) {
+      const adOp = buildAdOperation(
+        customerId,
+        getNextTempId(),
+        adGroupTempId,
+        ad
+      );
       operations.push({
-        ad_group_ad_operation: buildAdOperation(
-          customerId,
-          getNextTempId(),
-          adGroupTempId,
-          ad
-        ),
+        entity: 'ad_group_ad',
+        operation: 'create',
+        resource: adOp.create,
       });
     }
   }
@@ -631,7 +761,7 @@ export async function createCampaign(
   const dryRunResult = await mcp.mutate(operations, {
     customerId,
     dryRun: true,
-    partialFailure: false,
+    partialFailure: true, // Enable partial failure to see detailed errors
   });
 
   if (!dryRunResult.success) {

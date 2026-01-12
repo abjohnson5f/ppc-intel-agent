@@ -10,8 +10,12 @@ import { env } from '../config/index.js';
 import { runHealthCheck, type HealthCheckResult } from './health-check-agent.js';
 import { runCompetitorIntel, type CompetitorIntelResult } from './competitor-intel-agent.js';
 import { createCampaign, campaignBuilderTool } from './campaign-builder-agent.js';
+import { runBudgetOptimizer, budgetOptimizerTool } from './budget-optimizer-agent.js';
+import { runAdCopyTester, adCopyTesterTool } from './ad-copy-tester-agent.js';
+import { runNegativeKeywordAnalysis, negativeKeywordTool } from './negative-keyword-agent.js';
 import { toolDefinitions as googleAdsTools, toolHandlers as googleAdsHandlers } from '../tools/google-ads.js';
 import { toolDefinitions as dataForSEOTools, toolHandlers as dataForSEOHandlers } from '../tools/dataforseo.js';
+import { toolDefinitions as notificationTools, toolHandlers as notificationHandlers } from '../tools/notifications.js';
 
 const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
@@ -20,17 +24,23 @@ const ORCHESTRATOR_SYSTEM_PROMPT = `You are an elite PPC Intelligence Agent for 
 ## Sub-Agents (High-Level Tasks)
 - **Health Check Agent**: Run comprehensive account health analysis
 - **Competitor Intel Agent**: Analyze competitor PPC strategies
+- **Campaign Builder Agent**: Create new campaigns from descriptions
+- **Budget Optimizer Agent**: Recommend budget reallocations
+- **Ad Copy Tester Agent**: Generate A/B test ad variations
+- **Negative Keyword Agent**: Find and add negative keywords
 
 ## Direct Tools (Granular Tasks)
 - Google Ads API tools for querying campaign/keyword data
 - DataForSEO tools for market research and competitor analysis
+- Notification tools for sending alerts
 
 ## Your Capabilities
 1. **Audit**: Run full account audits identifying waste and opportunities
 2. **Research**: Research keywords, competitors, and market trends
 3. **Optimize**: Recommend bid adjustments, negative keywords, new keywords
-4. **Report**: Generate executive summaries and detailed reports
-5. **Plan**: Create strategic recommendations and action plans
+4. **Create**: Build new campaigns from natural language descriptions
+5. **Report**: Generate executive summaries and detailed reports
+6. **Alert**: Send notifications about important findings
 
 ## Guidelines
 - Always start with data gathering before making recommendations
@@ -38,6 +48,8 @@ const ORCHESTRATOR_SYSTEM_PROMPT = `You are an elite PPC Intelligence Agent for 
 - Consider seasonal trends for landscaping businesses
 - Focus on local/geo-targeted opportunities
 - Be specific with numbers and dollar amounts
+- Use sub-agents for complex multi-step tasks
+- Use direct tools for specific data queries
 
 ## Output Format
 Structure your responses with:
@@ -92,15 +104,31 @@ const subAgentTools: Anthropic.Tool[] = [
     description: campaignBuilderTool.description,
     input_schema: campaignBuilderTool.input_schema,
   },
+  {
+    name: budgetOptimizerTool.name,
+    description: budgetOptimizerTool.description,
+    input_schema: budgetOptimizerTool.input_schema,
+  },
+  {
+    name: adCopyTesterTool.name,
+    description: adCopyTesterTool.description,
+    input_schema: adCopyTesterTool.input_schema,
+  },
+  {
+    name: negativeKeywordTool.name,
+    description: negativeKeywordTool.description,
+    input_schema: negativeKeywordTool.input_schema,
+  },
 ];
 
 // Combine all tools
-const allTools = [...subAgentTools, ...googleAdsTools, ...dataForSEOTools];
+const allTools = [...subAgentTools, ...googleAdsTools, ...dataForSEOTools, ...notificationTools];
 
 // Combined handler map
 const allHandlers: Record<string, (args: any) => Promise<any>> = {
   ...googleAdsHandlers,
   ...dataForSEOHandlers,
+  ...notificationHandlers,
   // Sub-agent handlers
   run_health_check: async ({ customer_id }: { customer_id?: string }) => {
     return await runHealthCheck(customer_id);
@@ -117,6 +145,9 @@ const allHandlers: Record<string, (args: any) => Promise<any>> = {
     return await runCompetitorIntel(target_domain, seed_keywords, location);
   },
   [campaignBuilderTool.name]: campaignBuilderTool.handler,
+  [budgetOptimizerTool.name]: budgetOptimizerTool.handler,
+  [adCopyTesterTool.name]: adCopyTesterTool.handler,
+  [negativeKeywordTool.name]: negativeKeywordTool.handler,
 };
 
 export interface OrchestratorOptions {
@@ -346,6 +377,61 @@ export const workflows = {
       
       Use the create_campaign tool to build and ${options.dryRun !== false ? 'validate (dry run)' : 'CREATE'} the campaign.
       ${options.dryRun !== false ? 'This is a dry run - the campaign will NOT be created yet.' : 'This will CREATE the campaign in PAUSED state.'}
+    `);
+  },
+
+  /**
+   * Optimize budgets
+   */
+  async optimizeBudgets(): Promise<AgentResponse> {
+    return runAgent(`
+      Analyze our campaign budgets and recommend optimizations:
+      
+      1. Review performance of all campaigns
+      2. Identify campaigns with good CPA that could benefit from more budget
+      3. Find campaigns with poor performance that should have budget reduced
+      4. Calculate specific budget reallocation recommendations
+      5. Estimate the impact of the changes
+      
+      We're a landscaping business, so consider seasonality (peak: March-October).
+    `);
+  },
+
+  /**
+   * Analyze negative keywords
+   */
+  async analyzeNegativeKeywords(): Promise<AgentResponse> {
+    return runAgent(`
+      Analyze search terms and recommend negative keywords:
+      
+      1. Get the search terms report
+      2. Identify irrelevant searches wasting money
+      3. Group negatives by category (DIY, jobs, wrong location, etc.)
+      4. Recommend match types for each negative
+      5. Calculate expected monthly savings
+      
+      We're a residential landscaping company in Dublin/Powell/Galena/New Albany, Ohio.
+    `);
+  },
+
+  /**
+   * Generate ad variations
+   */
+  async generateAdVariations(service: string, location: string = 'Dublin Ohio'): Promise<AgentResponse> {
+    return runAgent(`
+      Generate A/B test ad variations for:
+      
+      Service: ${service}
+      Location: ${location}
+      Business: Stiltner Landscapes
+      
+      Create 3-5 compelling ad variations that:
+      1. Test different emotional appeals
+      2. Test different CTAs
+      3. Follow all Google Ads policies
+      4. Highlight local presence and expertise
+      
+      Each variation should have a hypothesis for what it tests.
     `);
   },
 };
