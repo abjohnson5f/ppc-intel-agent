@@ -16,10 +16,15 @@ import { runNegativeKeywordAnalysis, negativeKeywordTool } from './negative-keyw
 import { toolDefinitions as googleAdsTools, toolHandlers as googleAdsHandlers } from '../tools/google-ads.js';
 import { toolDefinitions as dataForSEOTools, toolHandlers as dataForSEOHandlers } from '../tools/dataforseo.js';
 import { toolDefinitions as notificationTools, toolHandlers as notificationHandlers } from '../tools/notifications.js';
+import { getSkillsSummary, getSkill, skillCount } from '../skills/index.js';
 
 const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
-const ORCHESTRATOR_SYSTEM_PROMPT = `You are an elite PPC Intelligence Agent for managing Google Ads campaigns. You have access to:
+// Load marketing skills summary
+const skillsSummary = getSkillsSummary();
+console.log(`📚 Loaded ${skillCount} marketing skills`);
+
+const ORCHESTRATOR_SYSTEM_PROMPT = `You are an elite Marketing Intelligence Agent with deep expertise in PPC, SEO, content strategy, and creative production. You have access to:
 
 ## Sub-Agents (High-Level Tasks)
 - **Health Check Agent**: Run comprehensive account health analysis
@@ -41,6 +46,11 @@ const ORCHESTRATOR_SYSTEM_PROMPT = `You are an elite PPC Intelligence Agent for 
 4. **Create**: Build new campaigns from natural language descriptions
 5. **Report**: Generate executive summaries and detailed reports
 6. **Alert**: Send notifications about important findings
+7. **Marketing Strategy**: Brand voice, positioning, content strategy, lead magnets
+8. **Content Creation**: Direct response copy, email sequences, newsletters, SEO content
+9. **Creative Direction**: Visual strategy, ad creative concepts, social graphics
+
+${skillsSummary}
 
 ## Guidelines
 - Always start with data gathering before making recommendations
@@ -50,6 +60,9 @@ const ORCHESTRATOR_SYSTEM_PROMPT = `You are an elite PPC Intelligence Agent for 
 - Be specific with numbers and dollar amounts
 - Use sub-agents for complex multi-step tasks
 - Use direct tools for specific data queries
+- For marketing strategy questions, apply the relevant skill framework
+- When creating content, use the direct-response-copy or seo-content frameworks
+- For complex multi-step marketing projects, route through skill dependencies
 
 ## Output Format
 Structure your responses with:
@@ -58,10 +71,29 @@ Structure your responses with:
 - **Recommendations**: Prioritized action items with expected impact
 - **Next Steps**: What to do immediately
 
-Remember: You're optimizing for a landscaping business in Central Ohio (Dublin, Powell, Galena, New Albany).`;
+## Business Context
+**Business:** Stiltner Landscapes - Premium landscaping services in Central Ohio
+**Location:** Dublin, Powell, Galena, New Albany, Westerville
+**Services:** Landscape Design, Hardscaping, Outdoor Living, Lawn Care, Seasonal Maintenance
+**Website:** https://stiltnerlandscapes.com
+**Phone:** (614) 707-4788`;
 
 // Sub-agent tools that the orchestrator can call
 const subAgentTools: Anthropic.Tool[] = [
+  {
+    name: 'use_marketing_skill',
+    description: 'Load a detailed marketing skill framework. Use this when you need the full methodology for: brand-voice, positioning-angles, keyword-research, direct-response-copy, seo-content, email-sequences, lead-magnet, newsletter, content-atomizer, ai-creative-strategist, ai-image-generation, ai-product-photo, ai-social-graphics, or orchestrator.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        skill_name: {
+          type: 'string',
+          description: 'Name of the skill to load (e.g., "direct-response-copy", "brand-voice", "positioning-angles")',
+        },
+      },
+      required: ['skill_name'],
+    },
+  },
   {
     name: 'run_health_check',
     description: 'Run a comprehensive health check on the Google Ads account. Returns analysis of wasted spend, efficiency issues, and recommendations.',
@@ -129,6 +161,21 @@ const allHandlers: Record<string, (args: any) => Promise<any>> = {
   ...googleAdsHandlers,
   ...dataForSEOHandlers,
   ...notificationHandlers,
+  // Marketing skill handler
+  use_marketing_skill: async ({ skill_name }: { skill_name: string }) => {
+    const skill = getSkill(skill_name);
+    if (!skill) {
+      return { 
+        error: `Skill "${skill_name}" not found. Available skills: brand-voice, positioning-angles, keyword-research, direct-response-copy, seo-content, email-sequences, lead-magnet, newsletter, content-atomizer, ai-creative-strategist, ai-image-generation, ai-product-photo, ai-social-graphics, orchestrator` 
+      };
+    }
+    return {
+      name: skill.name,
+      description: skill.description,
+      framework: skill.content,
+      references: skill.references,
+    };
+  },
   // Sub-agent handlers
   run_health_check: async ({ customer_id }: { customer_id?: string }) => {
     return await runHealthCheck(customer_id);
