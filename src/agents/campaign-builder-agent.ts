@@ -732,6 +732,12 @@ export async function createCampaign(
   // Step 1: Design the campaign
   const spec = await designCampaign(description, businessInfo);
   
+  // For dry runs, add a unique suffix to avoid name conflicts with previous tests
+  if (dryRun) {
+    const timestamp = Date.now().toString().slice(-6); // Last 6 digits
+    spec.name = `${spec.name} [TEST-${timestamp}]`;
+  }
+  
   console.log('\n📋 Campaign Design:');
   console.log(`   Name: ${spec.name}`);
   console.log(`   Budget: $${spec.dailyBudget}/day`);
