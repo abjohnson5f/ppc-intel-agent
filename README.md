@@ -1,3 +1,16 @@
+# PPC Intel Agent 🚀
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
+[![Claude Agent SDK](https://img.shields.io/badge/Claude-Agent%20SDK-orange.svg)](https://docs.anthropic.com/claude/docs/agents)
+
+**Create complete Google Ads campaigns from natural language descriptions.**
+
+> "Create a landscape design campaign targeting Dublin and Powell Ohio with a $50/day budget"  
+> → Full campaign with ad groups, keywords, and responsive search ads in seconds.
+
+---
+
 # PPC Intelligence Agent 🤖
 
 An autonomous Google Ads management agent built with the **Claude Agent SDK pattern**. This agent can analyze, optimize, and report on PPC campaigns using AI-driven decision making.
@@ -173,21 +186,75 @@ export async function runMySubAgent(params: any) {
 
 Then register in `orchestrator.ts`.
 
+## How It Works
+
+The Campaign Builder uses a unique **MCP Bridge** pattern:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         CAMPAIGN BUILDER FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. NATURAL LANGUAGE INPUT                                                   │
+│     "Create a campaign for landscape design in Dublin targeting              │
+│      high-end residential customers with $50/day budget"                     │
+│                         ↓                                                    │
+│  2. AI DESIGNS CAMPAIGN (Claude)                                             │
+│     - Chooses optimal structure                                              │
+│     - Creates keyword lists with match types                                 │
+│     - Writes ad copy (validates 30/90 char limits)                          │
+│     - Sets bidding strategy                                                  │
+│                         ↓                                                    │
+│  3. BUILDS OPERATIONS                                                        │
+│     - CampaignBudget, Campaign, AdGroup, Keywords, Ads                      │
+│                         ↓                                                    │
+│  4. VALIDATES (DRY RUN)                                                      │
+│     Sends to MCP with dry_run: true                                         │
+│     Catches errors BEFORE creating                                          │
+│                         ↓                                                    │
+│  5. CREATES (IF APPROVED)                                                    │
+│     Campaign created in PAUSED state                                        │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 ## Roadmap
 
-- [ ] **v0.2**: Mutation tools (pause keywords, adjust bids) with approval workflow
-- [ ] **v0.3**: Scheduled runs (daily health checks, weekly reports)
-- [ ] **v0.4**: Multi-account management
-- [ ] **v0.5**: Slack/email notifications
+- [ ] **v0.2**: Budget Optimizer Agent, Ad Copy Tester Agent
+- [ ] **v0.3**: n8n webhook integration for trigger automation
+- [ ] **v0.4**: Scheduled health checks (daily/weekly reports)
+- [ ] **v0.5**: Multi-account management
+- [ ] **v0.6**: Slack/email notifications
 - [ ] **v1.0**: Web dashboard
 
 ## Security
 
-- All mutation operations require explicit `dry_run: false`
-- Queries are validated to prevent SQL injection
-- API keys are never logged
-- Rate limiting built into tool handlers
+- 🔒 All mutation operations require explicit `dry_run: false`
+- 🔒 Campaigns always created in PAUSED state
+- 🔒 GAQL queries validated to prevent injection
+- 🔒 API keys stored in `.env` (never committed)
+- 🔒 Rate limiting built into tool handlers
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Credits
+
+- Built with [Claude Agent SDK](https://docs.anthropic.com/claude/docs/agents) by Anthropic
+- Google Ads API integration via [@channel47/google-ads-mcp](https://github.com/channel47/google-ads-mcp-server)
+- Keyword data from [DataForSEO](https://dataforseo.com/)
 
 ## License
 
-Proprietary - Stiltner Landscapes & Co.
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+**Made with ❤️ for PPC marketers who'd rather strategize than click buttons.**
