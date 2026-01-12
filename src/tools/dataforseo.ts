@@ -59,7 +59,7 @@ export const dataForSEOTools = {
       },
       required: ['keywords'],
     },
-    handler: async ({ keywords, location_name = 'United States', language_code = 'en' }) => {
+    handler: async ({ keywords, location_name = 'United States', language_code = 'en' }: { keywords: string[]; location_name?: string; language_code?: string }) => {
       const results = await callDataForSEO('/keywords_data/google_ads/search_volume/live', {
         keywords,
         location_name,
@@ -101,7 +101,7 @@ export const dataForSEOTools = {
       },
       required: ['domain'],
     },
-    handler: async ({ domain, location_name = 'United States', limit = 100 }) => {
+    handler: async ({ domain, location_name = 'United States', limit = 100 }: { domain: string; location_name?: string; limit?: number }) => {
       const results = await callDataForSEO('/dataforseo_labs/google/ranked_keywords/live', {
         target: domain,
         location_name,
@@ -142,7 +142,7 @@ export const dataForSEOTools = {
       },
       required: ['keywords'],
     },
-    handler: async ({ keywords, location_name = 'United States' }) => {
+    handler: async ({ keywords, location_name = 'United States' }: { keywords: string[]; location_name?: string }) => {
       const results = await callDataForSEO('/dataforseo_labs/google/serp_competitors/live', {
         keywords,
         location_name,
@@ -185,7 +185,7 @@ export const dataForSEOTools = {
       },
       required: ['keyword'],
     },
-    handler: async ({ keyword, location_name = 'United States', limit = 50 }) => {
+    handler: async ({ keyword, location_name = 'United States', limit = 50 }: { keyword: string; location_name?: string; limit?: number }) => {
       const results = await callDataForSEO('/dataforseo_labs/google/keyword_suggestions/live', {
         keyword,
         location_name,
@@ -222,7 +222,7 @@ export const dataForSEOTools = {
       },
       required: ['keyword'],
     },
-    handler: async ({ keyword, location_name = 'United States' }) => {
+    handler: async ({ keyword, location_name = 'United States' }: { keyword: string; location_name?: string }) => {
       const results = await callDataForSEO('/serp/google/organic/live/advanced', {
         keyword,
         location_name,
