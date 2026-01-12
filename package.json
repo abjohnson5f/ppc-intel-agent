@@ -5,14 +5,12 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "start": "tsx src/index.ts",
+    "agent": "tsx src/index.ts",
+    "ask": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "tsx src/index.ts",
     "campaign": "tsx src/run-campaign-builder.ts",
-    "health-check": "tsx src/run-health-check.ts",
-    "competitor-intel": "tsx src/run-competitor-intel.ts",
-    "full-audit": "tsx src/run-full-audit.ts",
-    "keyword-research": "tsx src/run-keyword-research.ts",
     "webhook-server": "tsx src/webhook-server.ts"
   },
   "dependencies": {
